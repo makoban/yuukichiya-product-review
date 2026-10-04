@@ -25,11 +25,7 @@ window.ReviewPersistence = {
       key, backupKey, pendingKey,
       loadPending() { const raw=storage.getItem(pendingKey);if(!raw)return null;try{return model.validate(JSON.parse(raw));}catch{const error=Error('保存待ちの回答を読み込めません。上書きせず控えを確認してください。');error.code='review_pending_corrupt';throw error;} },
       savePending(next,confirmed) {
-        const known=new Map(confirmed.events.map(e=>[e.id,model.canonical(e)])),byId=new Map(next.events.map(e=>[e.id,e]));
-        const included=new Set(),queue=next.events.filter(e=>known.get(e.id)!==model.canonical(e)).map(e=>e.id);
-        while(queue.length){const id=queue.pop();if(included.has(id))continue;included.add(id);queue.push(...byId.get(id).parents);}
-        const events=next.events.filter(e=>included.has(e.id)),tasks=new Set(events.map(e=>e.task));
-        const compact=model.validate({...model.empty(),events,manualPairs:next.manualPairs.filter(p=>tasks.has(p.key))});
+        const compact=model.delta(next,confirmed);
         verify(pendingKey,model.merge(this.loadPending()||model.empty(),compact));
       },
       clearPending(confirmed) { const pending=this.loadPending();if(!pending)return;const ids=new Map(confirmed.events.map(e=>[e.id,model.canonical(e)]));if(pending.events.every(e=>ids.get(e.id)===model.canonical(e))&&pending.manualPairs.every(p=>confirmed.manualPairs.some(c=>c.key===p.key&&c.left===p.left&&c.right===p.right)))storage.removeItem(pendingKey); },
@@ -45,7 +41,7 @@ window.ReviewPersistence = {
         const raw = storage.getItem(this.sessionKey);
         if (!raw) return null;
         const s = JSON.parse(raw);
-        if (!s || !/^端末-[a-z0-9]{6}$/.test(s.reviewer) || !['match','single','held','history'].includes(s.mode) || typeof s.store !== 'string' || typeof s.school !== 'string' || typeof s.salesOnly !== 'boolean' || !Number.isInteger(s.page) || s.page < 0 || !Array.isArray(s.history) || s.history.length > 50) throw Error('再開位置のデータを確認してください。');
+        if (!s || !/^端末-[a-z0-9]{6}$/.test(s.reviewer) || !['match','single','held','history'].includes(s.mode) || typeof s.store !== 'string' || typeof s.school !== 'string' || typeof s.salesOnly !== 'boolean' || !Number.isInteger(s.page) || s.page < 0 || (s.cursor!==undefined&&(!Number.isInteger(s.cursor)||s.cursor<0)) || !Array.isArray(s.history) || s.history.length > 50) throw Error('再開位置のデータを確認してください。');
         return s;
       },
       saveSession(s) { verify(this.sessionKey, s); },
