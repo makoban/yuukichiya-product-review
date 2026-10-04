@@ -19,7 +19,7 @@ globalThis.VisualReviewCore = { create(D) {
   function validate(obj) {
     if(!obj||obj.schema!==schema||obj.datasetId!==D.datasetId||!Array.isArray(obj.events)||!Array.isArray(obj.manualPairs)||obj.events.length>30000||obj.manualPairs.length>15000)throw Error('回答データの形式が違います。');
     const pairs=new Map(originalPairs), ids=new Map();
-    for(const p of obj.manualPairs){if(!p||!P.has(p.left)||!P.has(p.right)||p.left===p.right||p.key!==pairKey(p.left,p.right)||Object.keys(p).some(k=>!['key','left','right'].includes(k)))throw Error('商品候補が不正です。');pairs.set(p.key,p);}
+    for(const p of obj.manualPairs){if(!p||!P.has(p.left)||!P.has(p.right)||p.left===p.right||p.key!==pairKey(p.left,p.right)||Object.keys(p).some(k=>!['key','left','right'].includes(k)))throw Error('商品候補が不正です。');if(P.get(p.left).source===P.get(p.right).source&&initial.root(p.left)!==initial.root(p.right))throw Error('既存候補のない登録同士です。');pairs.set(p.key,p);}
     for(const e of obj.events){
       if(!e||typeof e.id!=='string'||!/^[a-z0-9-]{1,100}$/.test(e.id)||typeof e.task!=='string'||!Array.isArray(e.parents)||e.parents.length>200||e.parents.some(p=>typeof p!=='string')||e.parents.includes(e.id)||typeof e.reviewer!=='string'||!/^端末-[a-z0-9]{6}$/.test(e.reviewer)||typeof e.at!=='string'||!Number.isFinite(Date.parse(e.at))||!e.value||typeof e.value!=='object'||typeof e.batchId!=='string'||!/^[a-z0-9-]{1,100}$/.test(e.batchId)||!['answer','undo'].includes(e.action)||!['image','text','mixed'].includes(e.evidence))throw Error('回答履歴が不正です。');
       if(Object.keys(e).some(k=>!['id','task','parents','reviewer','at','value','batchId','action','evidence'].includes(k)))throw Error('回答に不明な項目があります。');
@@ -30,6 +30,7 @@ globalThis.VisualReviewCore = { create(D) {
       }else if(!pairs.has(e.task)||!['same','family','different','hold','reset'].includes(e.value.relation)||Object.keys(e.value).some(k=>k!=='relation'))throw Error('商品対応の回答が不正です。');
       if(ids.has(e.id)&&canonical(ids.get(e.id))!==canonical(e))throw Error('回答番号に違う内容があります。');ids.set(e.id,e);
     }
+    const referenced=new Set(obj.events.map(e=>e.task));if(obj.manualPairs.some(p=>!referenced.has(p.key)))throw Error('回答のない追加候補があります。');
     const done=new Set(),visiting=new Set();
     function visit(id){if(done.has(id))return;if(visiting.has(id))throw Error('回答履歴が循環しています。');visiting.add(id);for(const parent of ids.get(id).parents){if(!ids.has(parent)||ids.get(parent).task!==ids.get(id).task)throw Error('回答の参照先が不正です。');visit(parent);}visiting.delete(id);done.add(id);}
     for(const id of ids.keys())visit(id);
@@ -43,14 +44,15 @@ globalThis.VisualReviewCore = { create(D) {
   const catKey=p=>p.cats.map(norm).sort().join('|');
   const rank=p=>p.source==='base'?6:Math.max(0,D.stores.indexOf(p.store));
   const productSort=(a,b)=>rank(P.get(a))-rank(P.get(b))||P.get(a).name.localeCompare(P.get(b).name,'ja')||a.localeCompare(b);
-  function features(p){const s=norm(p.name);return {
+  const featureCache=new Map();
+  function features(p){if(featureCache.has(p.key))return featureCache.get(p.key);const s=norm(p.name);const result={
     色:['ネイビー','コバルト','グリーン','レッド','ブルー','ワイン','ピンク','ホワイト','ブラック','イエロー','濃紺'].filter(x=>s.includes(x)),
     性別:['男子','女子','男女兼用'].filter(x=>s.includes(x)),袖:['半袖','長袖'].filter(x=>s.includes(x)),
     新旧:['従来品','旧タイプ','旧型','新製品','新タイプ','新型'].filter(x=>s.includes(x)),
-    品番:(s.match(/(?:[a-z]{1,5}-?)?\d{3,5}[a-z]{0,5}/g)||[]).filter(x=>!/^1[2-9]\d$/.test(x))};}
+    品番:(s.match(/(?:[a-z]{1,5}-?)?\d{3,5}[a-z]{0,5}/g)||[]).filter(x=>!/^1\d{2}(?:[ab]|cm)?$/.test(x)&&!p.sizes.some(v=>norm(v)===x))};featureCache.set(p.key,result);return result;}
   function warnings(members,s){const flags=new Set();const fs=members.map(k=>features(P.get(k)));for(let i=0;i<fs.length;i++)for(let j=i+1;j<fs.length;j++)for(const k of Object.keys(fs[i]))if(fs[i][k].length&&fs[j][k].length&&canonical(fs[i][k].slice().sort())!==canonical(fs[j][k].slice().sort()))flags.add(k+'の記載が違います');
     const schools=new Set(members.flatMap(k=>P.get(k).cats).filter(c=>/学校/.test(c)&&c!=='学校指定なし').map(norm));if(schools.size>1)flags.add('学校が違います');
-    const allowed=new Set(members);for(const p of [...D.pairs,...s.manualPairs])if(allowed.has(p.left)&&allowed.has(p.right)){const h=heads(p.key,s);if(h.length>1)flags.add('他の回答との確認が必要です');else if(h.length===1&&['different','family'].includes(h[0].value.relation))flags.add('以前に別の商品・仕様と回答されています');}
+    for(let i=0;i<members.length;i++)for(let j=i+1;j<members.length;j++){const h=heads(pairKey(members[i],members[j]),s);if(h.length>1)flags.add('他の回答との確認が必要です');else if(h.length===1&&['different','family'].includes(h[0].value.relation))flags.add('以前に別の商品・仕様と回答されています');}
     return [...flags];}
   function queues(s,options={}){
     const pairs=new Map([...D.pairs,...s.manualPairs].map(p=>[p.key,p])), identity=union(),eligible=union();
@@ -93,8 +95,8 @@ globalThis.VisualReviewCore = { create(D) {
     const wanted=new Map(),manual=new Map(s.manualPairs.map(p=>[p.key,p]));
     function add(a,b,rel){if(a===b)return;const key=pairKey(a,b);wanted.set(key,{relation:rel});if(!originalPairs.has(key))manual.set(key,{key,left:[a,b].sort()[0],right:[a,b].sort()[1]});}
     for(const block of blocks){
-      const excluded=new Set(selection[block.id]||[]), kept=block.members.filter(k=>!excluded.has(k));
-      if(relation==='same'&&excluded.size===0){for(let i=1;i<kept.length;i++)add(kept[0],kept[i],'same');for(const p of block.edges)add(p.left,p.right,'same');}
+      const excluded=new Set(relation==='same'?[]:selection[block.id]||[]), kept=block.members.filter(k=>!excluded.has(k));
+      if(relation==='same'){for(let i=1;i<kept.length;i++)add(kept[0],kept[i],'same');for(const p of block.edges)add(p.left,p.right,'same');}
       else if(relation==='hold'){for(const p of block.edges)add(p.left,p.right,'hold');}
       else{
         if(kept.length<1||!excluded.size)throw Error('同じ商品側と違う商品側を選んでください。');
@@ -107,5 +109,6 @@ globalThis.VisualReviewCore = { create(D) {
   }
   function append(s,wanted,manualPairs,info){const before=[],events=[];for(const [task,value]of wanted){const h=heads(task,s);before.push({task,heads:h.map(e=>e.id),value:h.length===1?h[0].value:null});events.push({id:info.uuid(),task,parents:h.map(e=>e.id),at:info.at,reviewer:info.reviewer,value,batchId:info.batchId,action:info.action||'answer',evidence:info.evidence||'mixed'});}return {state:validate({...s,manualPairs,events:[...s.events,...events]}),events,before};}
   function undo(s,record,info){const wanted=new Map();for(const b of record.before){const h=heads(b.task,s);if(h.some(e=>e.batchId!==record.batchId))throw Error('別の端末で回答が更新されています。先に内容を確認してください。');wanted.set(b.task,b.value||(b.task.startsWith('solo:')?{mapping:'reset'}:{relation:'reset'}));}return append(s,wanted,s.manualPairs,{...info,action:'undo'});}
-  return {schema,datasetId:D.datasetId,products:P,originalPairs,canonical,pairKey,empty,validate,merge,heads,queues,batch,append,undo,warnings};
+  function delta(next,confirmed){const known=new Map(confirmed.events.map(e=>[e.id,canonical(e)])),byId=new Map(next.events.map(e=>[e.id,e])),included=new Set(),queue=next.events.filter(e=>known.get(e.id)!==canonical(e)).map(e=>e.id);while(queue.length){const id=queue.pop();if(included.has(id))continue;included.add(id);queue.push(...byId.get(id).parents);}const events=next.events.filter(e=>included.has(e.id)),tasks=new Set(events.map(e=>e.task));return validate({...empty(),events,manualPairs:next.manualPairs.filter(p=>tasks.has(p.key))});}
+  return {schema,datasetId:D.datasetId,products:P,originalPairs,canonical,pairKey,empty,validate,merge,heads,queues,batch,append,undo,warnings,delta};
 }};

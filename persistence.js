@@ -1,12 +1,12 @@
 'use strict';
 window.ReviewPersistence = {
-  create(model, storage) {
+  create(model, storage, compatibleDatasetIds = []) {
     const key = 'yuukichiya-product-review:' + model.datasetId;
     const backupKey = key + ':verified-backup';
     const pendingKey = key + ':pending-outbox-v1';
     function read() {
       let value = model.empty(), found = false, invalid = false, unavailable = false;
-      for (const k of [key, backupKey, ...(window.REVIEW_DATA.compatibleDatasetIds || []).map(id => 'yuukichiya-product-review:' + id)]) {
+      for (const k of [key, backupKey, ...compatibleDatasetIds.map(id => 'yuukichiya-product-review:' + id)]) {
         let raw;
         try { raw = storage.getItem(k); } catch (e) { unavailable = true; continue; }
         if (!raw) continue;
@@ -45,7 +45,7 @@ window.ReviewPersistence = {
         const raw = storage.getItem(this.sessionKey);
         if (!raw) return null;
         const s = JSON.parse(raw);
-        if (!s || typeof s.reviewer !== 'string' || s.reviewer.length > 60 || !['match','retail','plan'].includes(s.mode) || typeof s.store !== 'string' || typeof s.school !== 'string' || !Array.isArray(s.history) || s.history.length > 15000) throw Error('再開位置のデータを確認してください。');
+        if (!s || !/^端末-[a-z0-9]{6}$/.test(s.reviewer) || !['match','single','held','history'].includes(s.mode) || typeof s.store !== 'string' || typeof s.school !== 'string' || typeof s.salesOnly !== 'boolean' || !Number.isInteger(s.page) || s.page < 0 || !Array.isArray(s.history) || s.history.length > 50) throw Error('再開位置のデータを確認してください。');
         return s;
       },
       saveSession(s) { verify(this.sessionKey, s); },
