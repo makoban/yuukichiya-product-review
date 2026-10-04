@@ -44,20 +44,20 @@ globalThis.VisualReviewCore = { create(D) {
   const autoPairs=D.pairs.filter(p=>compatible(p.left,p.right));
   const semanticCache=new WeakMap();
   function semantic(s){if(!semanticCache.has(s)){const pairs=new Map([...autoPairs,...s.manualPairs.filter(p=>compatible(p.left,p.right))].map(p=>[p.key,p]));semanticCache.set(s,{pairs,...identityFor(s,pairs)});}return semanticCache.get(s);}
-  function identityFor(s,pairs){
+  function identityFor(s,pairs,ignored=new Set()){
     const graph=union(),types=new Map(D.products.map(p=>[p.key,new Set(productType(p)?[productType(p)]:[])])),rejected=new Set();
-    for(const p of [...pairs.values()].sort((a,b)=>a.key.localeCompare(b.key))){const h=heads(p.key,s);if(h.length!==1||h[0].value.relation!=='same')continue;
+    for(const p of [...pairs.values()].sort((a,b)=>a.key.localeCompare(b.key))){const h=heads(p.key,s);if(ignored.has(p.key)||h.length!==1||h[0].value.relation!=='same')continue;
       const a=graph.root(p.left),b=graph.root(p.right),kinds=new Set([...types.get(a),...types.get(b)]);
       if(kinds.size>1){rejected.add(p.key);continue;}graph.join(a,b);types.set(graph.root(a),kinds);
     }
-    return {graph,rejected};
+    return {graph,rejected,types};
   }
   function checkNewAnswers(s,events,checkTransitive=true){
     const pairs=new Map([...D.pairs,...s.manualPairs].map(p=>[p.key,p]));
     for(const e of events){const p=pairs.get(e.task);if(e.value.relation==='same'&&p&&!compatible(p.left,p.right))throw Error('商品種別が違います。上衣・ズボンなどは別の商品として確認してください。');if(e.value.mapping==='linked'&&!compatible(e.task.slice(5),e.value.target))throw Error('商品種別が違うBASE商品は選べません。');}
     if(!checkTransitive)return;
-    const {graph,rejected}=semantic(s),changedRoots=new Set(events.filter(e=>e.value.relation==='same').flatMap(e=>{const p=pairs.get(e.task);return p?[graph.root(p.left),graph.root(p.right)]:[];}));
-    if([...rejected].some(key=>{const p=pairs.get(key);return changedRoots.has(graph.root(p.left))||changedRoots.has(graph.root(p.right));}))throw Error('別の商品種別を同じ商品としてつなぐことはできません。');
+    const same=events.filter(e=>e.value.relation==='same'),{graph,types}=identityFor(s,semantic(s).pairs,new Set(same.map(e=>e.task)));
+    for(const e of same){const p=pairs.get(e.task),a=graph.root(p.left),b=graph.root(p.right),kinds=new Set([...types.get(a),...types.get(b)]);if(kinds.size>1)throw Error('別の商品種別を同じ商品としてつなぐことはできません。');graph.join(a,b);types.set(graph.root(a),kinds);}
   }
   const empty = () => ({schema,datasetId:D.datasetId,events:[],manualPairs:[]});
   const cache = new WeakMap();

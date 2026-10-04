@@ -43,10 +43,10 @@ test('product types distinguish accessories, swimwear parts and uniform trousers
 });
 
 test('unknown names cannot bridge upper and lower garments, including manual BASE links and stale-client writes',()=>{
-  const products=[['air-top','air','ジャージ上衣'],['air-bottom','air','ジャージズボン'],['base-unknown','base','指定商品']].map(([key,source,name])=>({key,source,name,cats:['学校'],sizes:[],active:source==='air',store:source==='air'?'本店':'BASE'}));
-  const edges=[['air-top','base-unknown'],['air-bottom','base-unknown'],['air-top','air-bottom']].map(([left,right])=>({left,right,key:'pair:'+[left,right].sort().join('|')}));
+  const products=[['air-top','air','ジャージ上衣'],['air-top2','air','ジャージ上衣 新型'],['air-bottom','air','ジャージズボン'],['base-unknown','base','指定商品']].map(([key,source,name])=>({key,source,name,cats:['学校'],sizes:[],active:source==='air',store:source==='air'?'本店':'BASE'}));
+  const edges=[['air-top','base-unknown'],['air-bottom','base-unknown'],['air-top','air-bottom'],['air-top','air-top2']].map(([left,right])=>({left,right,key:'pair:'+[left,right].sort().join('|')}));
   const model=ctx.VisualReviewCore.create({datasetId:'types-fixture',products,pairs:edges,stores:['本店']}),empty=model.empty();
-  assert.equal(model.queues(empty).blocks.length,2);assert(model.queues(empty).blocks.every(g=>!(g.members.includes('air-top')&&g.members.includes('air-bottom'))));
+  assert.equal(model.queues(empty).blocks.length,3);assert(model.queues(empty).blocks.every(g=>!(g.members.includes('air-top')&&g.members.includes('air-bottom'))));
   const topKey=model.pairKey('air-top','base-unknown'),bottomKey=model.pairKey('air-bottom','base-unknown');
   const first=model.append(empty,new Map([[topKey,{relation:'same'}]]),[],info());
   assert.throws(()=>model.append(first.state,new Map([[bottomKey,{relation:'same'}]]),[],info()),/商品種別/);
@@ -58,6 +58,7 @@ test('unknown names cannot bridge upper and lower garments, including manual BAS
   assert.throws(()=>model.mergeIncoming(empty,legacy),/商品種別/);
   const second=model.append(empty,new Map([[bottomKey,{relation:'same'}]]),[],info());
   const merged=model.mergeIncoming(first.state,second.state);const reverse=model.mergeIncoming(second.state,first.state);assert.equal(model.canonical([...merged.events].sort((a,b)=>a.id.localeCompare(b.id))),model.canonical([...reverse.events].sort((a,b)=>a.id.localeCompare(b.id))));assert.equal(model.canonical(model.queues(merged).blocks),model.canonical(model.queues(reverse).blocks));assert(model.queues(merged).blocks.some(g=>g.status==='conflict'&&g.warnings.length));assert.notEqual(model.queues(merged).identity.root('air-top'),model.queues(merged).identity.root('air-bottom'));
+  const legitimate=model.append(merged,new Map([[model.pairKey('air-top','air-top2'),{relation:'same'}]]),[],info());assert.equal(model.heads(model.pairKey('air-top','air-top2'),legitimate.state)[0].value.relation,'same');
   const fix=model.append(merged,new Map([[bottomKey,{relation:'different'}]]),[],info());assert(!model.queues(fix.state).blocks.some(g=>g.status==='conflict'));
   assert.equal(model.merge(empty,legacy).events.length,1);
 });
