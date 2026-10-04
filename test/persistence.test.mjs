@@ -21,6 +21,10 @@ test('anonymous visual review saves verified backups, compact outbox and every r
     p.saveSession({reviewer:'端末-abcdef',mode,store:'',school:'',salesOnly:true,page:2,history:[]});
     assert.equal(p.readSession().mode,mode);assert.equal(p.readSession().reviewer,'端末-abcdef');assert.equal(p.readSession().page,2);
   }
+  const resume={mode:'match',tasks:group.edges.map(e=>e.key)},returnTo={mode:'match',page:2,cursor:6,resume};
+  p.saveSession({reviewer:'端末-abcdef',mode:'history',store:'本店',school:'学校',salesOnly:true,page:0,cursor:6,history:[],resume,returnTo});
+  assert.equal(JSON.stringify(p.readSession().resume),JSON.stringify(resume));
+  assert.equal(JSON.stringify(p.readSession().returnTo),JSON.stringify(returnTo));
   assert.equal(m.delta(answer.state,answer.state).events.length,0);
   const hold=m.batch(answer.state,[group],{},'hold',info());
   const delta=m.delta(hold.state,answer.state);assert(delta.events.every(e=>e.batchId===hold.events[0].batchId||answer.events.some(x=>x.id===e.id)));

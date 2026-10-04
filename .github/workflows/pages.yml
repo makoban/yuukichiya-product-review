@@ -21,7 +21,7 @@ jobs:
       - name: Prepare static files
         run: |
           mkdir site
-          cp index.html style.css app.js core.js persistence.js data.json robots.txt .nojekyll site/
+          cp index.html style.css app.js core.js persistence.js ui-state.js data.json robots.txt .nojekyll site/
           cp -R assets site/assets
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

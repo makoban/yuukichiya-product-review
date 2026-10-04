@@ -42,6 +42,8 @@ window.ReviewPersistence = {
         if (!raw) return null;
         const s = JSON.parse(raw);
         if (!s || !/^端末-[a-z0-9]{6}$/.test(s.reviewer) || !['match','single','held','history'].includes(s.mode) || typeof s.store !== 'string' || typeof s.school !== 'string' || typeof s.salesOnly !== 'boolean' || !Number.isInteger(s.page) || s.page < 0 || (s.cursor!==undefined&&(!Number.isInteger(s.cursor)||s.cursor<0)) || !Array.isArray(s.history) || s.history.length > 50) throw Error('再開位置のデータを確認してください。');
+        const validResume = r => r && ['match','single','held'].includes(r.mode) && Array.isArray(r.tasks) && r.tasks.length <= 30000 && r.tasks.every(t => typeof t === 'string' && t.length <= 200);
+        if ((s.resume !== undefined && !validResume(s.resume)) || (s.returnTo !== undefined && (!s.returnTo || !['match','single','held'].includes(s.returnTo.mode) || !Number.isInteger(s.returnTo.page) || s.returnTo.page < 0 || !Number.isInteger(s.returnTo.cursor) || s.returnTo.cursor < 0 || (s.returnTo.resume !== undefined && !validResume(s.returnTo.resume))))) throw Error('再開位置のデータを確認してください。');
         return s;
       },
       saveSession(s) { verify(this.sessionKey, s); },

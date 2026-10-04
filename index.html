@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="core.js" defer></script>
   <script src="persistence.js" defer></script>
+  <script src="ui-state.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -18,9 +19,10 @@
   <main>
     <div class="statusline"><p id="remaining">商品を読み込んでいます</p><p id="save-status" role="status">読み込み中</p></div>
     <div id="error" class="error" role="alert" hidden></div>
+    <div id="answer-notice" class="answer-notice" hidden><p id="answer-message" role="status" aria-live="polite" aria-atomic="true"></p><button data-history>保存した回答を見る</button></div>
     <section id="overview-panel" hidden></section>
     <section id="questions-panel" aria-label="商品の確認"><div id="page-label" class="page-label"></div><div id="questions"></div><div class="page-actions" id="page-actions"></div></section>
-    <p class="footnote">回答は毎回保存します。あとから訂正できます。</p>
+    <div class="footnote"><p>回答は毎回保存します。同じブラウザでは続きから再開できます。</p><button id="history-open" data-history>保存した回答</button><button id="resume-review" data-resume hidden>商品の確認に戻る</button></div>
   </main>
   <dialog id="menu"><form id="settings"><div class="dialog-heading"><h2>確認する条件</h2><button type="button" data-close="menu" class="quiet">閉じる</button></div><label>確認する内容<select id="mode"><option value="match">同じ商品の候補</option><option value="single">対応候補がない商品</option><option value="held">保留した候補</option><option value="history">最近の回答・訂正</option></select></label><label>対象<select id="salesOnly"><option value="yes">2年間に売れた商品から</option><option value="no">売れていない商品も含める</option></select></label><label>登録元<select id="store"><option value="">すべての登録元</option></select></label><label>学校・カテゴリ<select id="school"><option value="">すべて</option></select></label><button type="submit" class="primary">この条件で見る</button><div class="menu-actions"><button type="button" id="export">回答の控えを保存</button><button type="button" id="retry">保存サービスへ接続し直す</button></div></form></dialog>
   <dialog id="photo"><div class="dialog-heading"><h2 id="photo-title"></h2><button data-close="photo" class="quiet">閉じる</button></div><img id="photo-image" alt="" width="640" height="640"><p id="photo-source"></p></dialog>
