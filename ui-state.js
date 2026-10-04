@@ -17,7 +17,16 @@ window.ReviewUI = {
     return Math.max(0, Math.min(index, Math.max(0, items.length - 1)));
   },
   capture(items, mode, cursor) {
-    return {mode, tasks: [...new Set(items.slice(cursor).flatMap(item => this.tasks(item, mode)))]};
+    // Keep the earlier pending rows too: once this tail is complete, revisit them.
+    const ordered = [...items.slice(cursor), ...items.slice(0, cursor)];
+    return {mode, tasks: [...new Set(ordered.flatMap(item => this.tasks(item, mode)))]};
+  },
+  next(items, session, visible) {
+    const shown = new Set(visible.flatMap(item => this.tasks(item, session.mode)));
+    const positions = new Map();
+    items.forEach((item, i) => this.tasks(item, session.mode).forEach(task => positions.set(task, i)));
+    const task = session.resume?.tasks.find(task => !shown.has(task) && positions.has(task));
+    return task === undefined ? this.position(items, session) : positions.get(task);
   },
   label(value) {
     return value.mapping ? ({unmatched:'対応先なし', linked:'BASEの商品に対応', hold:'保留', reset:'確認前に戻しました'}[value.mapping]) : ({same:'同じ商品', different:'別の商品', family:'同じ型の別仕様', hold:'保留', reset:'確認前に戻しました'}[value.relation]);

@@ -28,6 +28,14 @@ test('solo resume uses product IDs and supports old sessions and held queues',()
   assert.equal(ui.position(solos,{mode:'single',page:2,cursor:0}),20);
   assert.equal(ui.position(groups,{mode:'held',page:1,cursor:3,resume:ui.capture(groups,'held',3)}),3);
 });
+test('forward navigation follows unseen task IDs rather than jumping past a remnant sorted to the tail',()=>{
+  const session={mode:'match',page:0,cursor:0,resume:ui.capture(groups,'match',0)};
+  const moved=[...groups.slice(1),{id:'split-remnant',edges:groups[0].edges}];
+  assert.equal(moved[ui.next(moved,session,groups.slice(0,3))].id,'group-3');
+  const later={mode:'match',page:2,cursor:6,resume:ui.capture(groups,'match',6)};
+  const pending=[groups[0],groups[1],groups[6]];
+  assert.equal(pending[ui.next(pending,later,[groups[6]])].id,'group-0');
+});
 test('readbacks distinguish actual choices, links, corrections and concurrent conflicts',()=>{
   const event=(id,value)=>({id,task:'pair-1',value});
   const same=event('a',{relation:'same'}),different=event('b',{relation:'different'}),hold=event('c',{relation:'hold'});
