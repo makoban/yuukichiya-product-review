@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://baseec-img-mng.akamaized.net https://base-ec2.akamaized.net; connect-src 'self' https://yuukichiya-purchase-history-prototype.onrender.com; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>勇吉屋｜商品をまとめて確認</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="core.js" defer></script>
+  <script src="persistence.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="header"><div class="brand"><span class="brand-mark">勇</span><div><p>勇吉屋</p><h1>商品をまとめて確認</h1></div></div><button id="menu-open" class="quiet">確認する条件</button></header>
+  <nav class="tabs" aria-label="表示する内容"><button id="tab-overview" role="tab" aria-selected="false">概要</button><button id="tab-questions" role="tab" aria-selected="true">商品確認</button></nav>
+  <main>
+    <div class="statusline"><p id="remaining">商品を読み込んでいます</p><p id="save-status" role="status">読み込み中</p></div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section id="overview-panel" hidden></section>
+    <section id="questions-panel" aria-label="商品の確認"><div id="page-label" class="page-label"></div><div id="questions"></div><div class="page-actions" id="page-actions"></div></section>
+    <p class="footnote">回答は毎回保存します。あとから訂正できます。</p>
+  </main>
+  <dialog id="menu"><form id="settings"><div class="dialog-heading"><h2>確認する条件</h2><button type="button" data-close="menu" class="quiet">閉じる</button></div><label>確認する内容<select id="mode"><option value="match">同じ商品の候補</option><option value="single">対応候補がない商品</option><option value="held">保留した候補</option><option value="history">最近の回答・訂正</option></select></label><label>対象<select id="salesOnly"><option value="yes">2年間に売れた商品から</option><option value="no">売れていない商品も含める</option></select></label><label>登録元<select id="store"><option value="">すべての登録元</option></select></label><label>学校・カテゴリ<select id="school"><option value="">すべて</option></select></label><button type="submit" class="primary">この条件で見る</button><div class="menu-actions"><button type="button" id="export">回答の控えを保存</button><button type="button" id="retry">保存サービスへ接続し直す</button></div></form></dialog>
+  <dialog id="photo"><div class="dialog-heading"><h2 id="photo-title"></h2><button data-close="photo" class="quiet">閉じる</button></div><img id="photo-image" alt="" width="640" height="640"><p id="photo-source"></p></dialog>
+  <dialog id="details"><div class="dialog-heading"><h2>詳しい商品情報</h2><button data-close="details" class="quiet">閉じる</button></div><div id="details-body"></div></dialog>
+  <dialog id="picker"><div class="dialog-heading"><h2>BASEの対応先を探す</h2><button data-close="picker" class="quiet">閉じる</button></div><label>学校名・商品名<input id="base-search" type="search" placeholder="学校名や品番で検索"></label><div id="base-results" class="product-grid"></div></dialog>
+</body>
+</html>
