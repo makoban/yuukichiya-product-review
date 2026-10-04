@@ -30,12 +30,14 @@ test('anonymous visual review saves verified backups, compact outbox and every r
 
 test('a BASE link can be undone, regrouped with original Air candidates and sent as a valid delta',()=>{
   const product=(key,source)=>({key,source,store:source==='air'?'本店':'BASE',name:'半袖体操服',cats:['学校'],sizes:[],active:source==='air',image:''});
-  const data={datasetId:'qa-bridge',products:[product('air-x','air'),product('air-z','air'),product('base-y','base')],stores:['本店'],pairs:[{key:'pair:air-z|base-y',left:'air-z',right:'base-y'}]};
+  const data={datasetId:'qa-bridge',products:[product('air-x','air'),product('air-z','air'),product('base-y','base'),product('air-other','air'),product('base-other','base')],stores:['本店'],pairs:[{key:'pair:air-z|base-y',left:'air-z',right:'base-y'}]};
   const model=ctx.VisualReviewCore.create(data),empty=model.empty(),key=model.pairKey('air-x','base-y'),pair={key,left:'air-x',right:'base-y'};
-  const linked=model.append(empty,new Map([[key,{relation:'same'}],['solo:air-x',{mapping:'linked',target:'base-y'}]]),[pair],info());
+  const otherKey=model.pairKey('air-other','base-other'),otherPair={key:otherKey,left:'air-other',right:'base-other'};
+  const confirmed=model.append(empty,new Map([[otherKey,{relation:'same'}]]),[otherPair],info());
+  const linked=model.append(confirmed.state,new Map([[key,{relation:'same'}],['solo:air-x',{mapping:'linked',target:'base-y'}]]),[otherPair,pair],info());
   const undone=model.undo(linked.state,{...linked,batchId:linked.events[0].batchId},info());
   const group=model.queues(undone.state).blocks.find(g=>g.members.length===3);assert(group);
   const done=model.batch(undone.state,[group],{},'same',info());assert.equal(model.queues(done.state).blocks.length,0);
-  const delta=model.delta(done.state,undone.state);assert.equal(model.canonical(model.merge(undone.state,delta)),model.canonical(done.state));
+  const delta=model.delta(done.state,undone.state);assert.equal(model.canonical(model.merge(undone.state,delta)),model.canonical(done.state));assert(!delta.events.some(e=>e.task===otherKey));assert(!delta.manualPairs.some(p=>p.key===otherKey));
   const p=ctx.window.ReviewPersistence.create(model,store);p.savePending(done.state,undone.state);assert.equal(model.canonical(model.merge(undone.state,p.loadPending())),model.canonical(done.state));
 });
