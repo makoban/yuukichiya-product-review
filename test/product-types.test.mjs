@@ -34,12 +34,26 @@ test('product types distinguish accessories, swimwear parts and uniform trousers
   const kind=(name,cats=[])=>m.productType({key:'fixture:'+name+cats.join('|'),name,cats});
   assert.equal(kind('赤白帽子 校章入り'),'赤白帽子');
   assert.equal(kind('帽子校章マーク'),'帽子マーク');
+  assert.equal(kind('小清水小学校 メッシュ通学黄帽子 校章シール付き'),'帽子');
+  assert.equal(kind('通学帽子 校章シール付'),'帽子');
+  assert.equal(kind('校章シール'),'校章・名札');
   assert.equal(kind('女子水着 セパレート 上衣'),'水着上衣');
   assert.equal(kind('女子 半袖 ズボン',['水着']),'水着下衣');
   assert.equal(kind('ズボン ST7605',['学生ズボン']),'制服スラックス');
   assert.equal(kind('長ズボン 2952'),'長ズボン');
   assert.equal(kind('PUMA ジャージ上下セット'),'上下セット');assert.equal(kind('ジャージ上下'),'上下セット');assert.equal(kind('半袖体操服 校章刺繍'),'体操服・半袖');assert.equal(kind('詰襟学生服 ボタン付き'),'詰襟学生服');assert.equal(kind('ジャージズボン',['夏ズボン']),'長ズボン');
   assert.equal(kind('ジャージ'),null);assert.equal(kind('制服'),null);
+});
+
+test('the real school hat remains selectable while a badge or red-white cap cannot be linked',()=>{
+  const air='air:0:10169',base='base:72149462';
+  assert.equal(m.productType(m.products.get(air)),'帽子');
+  assert.equal(m.productType(m.products.get(base)),'帽子');
+  assert(m.compatible(air,base));
+  assert(!m.compatible(air,'base:72149461'));
+  const key=m.pairKey(air,base),manual=m.originalPairs.has(key)?[]:[{key,left:air,right:base}];
+  const result=m.append(m.empty(),new Map([['solo:'+air,{mapping:'linked',target:base}],[key,{relation:'same'}]]),manual,info());
+  assert.equal(m.heads('solo:'+air,result.state)[0].value.target,base);
 });
 
 test('unknown names cannot bridge upper and lower garments, including manual BASE links and stale-client writes',()=>{
