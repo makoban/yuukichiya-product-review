@@ -67,7 +67,14 @@
   async function solo(key,mapping,target){if(busy||!ready)return;try{if(pending&&!pending.events.some(e=>e.task==='solo:'+key))throw Error('保存待ちの商品を先に保存してください。');const base=pending?model.merge(state,pending.state):state,wanted=new Map([['solo:'+key,target?{mapping,target}:{mapping}]]),mp=[...base.manualPairs];if(target){const task=model.pairKey(key,target);wanted.set(task,{relation:'same'});if(!model.originalPairs.has(task)&&!mp.some(p=>p.key===task)){const [left,right]=[key,target].sort();mp.push({key:task,left,right});}}await commit(replacePending(model.append(base,wanted,mp,{...info(),...(pending?{batchId:pending.batchId}:{})}),task=>task==='solo:'+key||task.includes(key)));}catch(e){error(e.message);}}
   async function undo(record){if(!record||busy||!ready||pending)return;try{if(record.before.some(b=>b.heads.length>1))throw Error('以前の回答に食い違いがあります。個別に確認してください。');const result=model.undo(state,record,info());if(await commit(result)){latest=null;newPage();render();}}catch(e){error(e.message);}}
   function openMenu(){if(busy||pending){error('保存待ちの回答を先に保存してください。');return;}for(const k of ['mode','store','school'])$('#'+k).value=session[k];$('#salesOnly').value=session.salesOnly?'yes':'no';$('#menu').showModal();}
-  function searchBase(){const term=norm($('#base-search').value);const school=pickerProduct?.cats||[];const ps=D.products.filter(p=>p.source==='base'&&model.compatible(pickerProduct.key,p.key)&&(!term||norm(p.name+p.cats.join('')).includes(term))).sort((a,b)=>Number(b.cats.some(c=>school.includes(c)))-Number(a.cats.some(c=>school.includes(c)))).slice(0,24);$('#base-results').innerHTML=ps.map(p=>card(p.key,null).replace('</article>',`<button class="selection-button" data-link-base="${esc(p.key)}" ${busy?'disabled':''}>同じ商品です</button></article>`)).join('');layout();}
+  function searchBase(){
+    const terms=$('#base-search').value.normalize('NFKC').trim().split(/\s+/).filter(Boolean).map(norm),school=pickerProduct?.cats||[];
+    const matches=D.products.filter(p=>p.source==='base'&&model.compatible(pickerProduct.key,p.key)&&terms.every(term=>norm(p.name+p.cats.join('')).includes(term)))
+      .sort((a,b)=>Number(b.cats.some(c=>school.includes(c)))-Number(a.cats.some(c=>school.includes(c))));
+    $('#base-search-status').textContent=`検索結果 ${matches.length}件${matches.length>24?'（先頭24件を表示）':''}`;
+    $('#base-results').innerHTML=matches.length?matches.slice(0,24).map(p=>card(p.key,null).replace('</article>',`<button class="selection-button" data-link-base="${esc(p.key)}" ${busy?'disabled':''}>同じ商品です</button></article>`)).join(''):'<p class="search-empty"><span class="phrase">該当する商品はありません。</span><span class="phrase">検索する言葉を変えてください。</span></p>';
+    $('#base-results').scrollTop=0;layout();
+  }
   document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
     if(b.dataset.close){$('#'+b.dataset.close).close();return;}
     if(b.id==='tab-overview')return tab('overview');if(b.id==='tab-questions'||b.hasAttribute('data-start'))return tab('questions');
@@ -102,7 +109,10 @@
     if(nextMode!=='history'){delete session.resume;delete session.returnTo;newPage(0);}else remember();
     $('#menu').close();tab('questions');
   });
-  $('#base-search').addEventListener('input',searchBase);for(const d of document.querySelectorAll('dialog'))d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}});
+  $('#base-search').addEventListener('input',searchBase);
+  $('#base-search').addEventListener('compositionend',searchBase);
+  $('#base-search-form').addEventListener('submit',e=>{e.preventDefault();searchBase();});
+  for(const d of document.querySelectorAll('dialog'))d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}});
   document.addEventListener('toggle',e=>{if(e.target.tagName==='DETAILS')layout();},true);
   addEventListener('resize',layout);addEventListener('beforeunload',e=>{if(busy||pending){e.preventDefault();e.returnValue='';}});
   try{const response=await fetch('data.json',{cache:'no-cache'});if(!response.ok)throw Error();D=await response.json();model=VisualReviewCore.create(D);state=model.empty();for(const store of [...D.stores,'BASE'])$('#store').insertAdjacentHTML('beforeend',`<option value="${esc(store)}">${esc(store)}</option>`);for(const c of [...new Set(D.products.flatMap(p=>p.cats))].sort((a,b)=>a.localeCompare(b,'ja')))$('#school').insertAdjacentHTML('beforeend',`<option value="${esc(c)}">${esc(c)}</option>`);newPage();render();await init();}
