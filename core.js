@@ -35,7 +35,7 @@ globalThis.VisualReviewCore = { create(D) {
       [/ポロシャツ/,'ポロシャツ・'+sleeve],[/シャツ|カッター|片ポケ/,'シャツ・'+sleeve],
       [/セーラ/,'セーラー・'+sleeve],[/ブレザー|ジャケット/,'ブレザー'],
       [/学ラン|学らん|詰襟|詰衿|詰め襟|詰め衿/,'詰襟学生服'],
-      [/スモック|通園服/,'スモック・通園服'],[/上衣|上着/,'その他上着']
+      [/スモック|通園服/,'スモック・通園服'],[/上衣|上着/,'その他上着'],[/校章シール/,'校章・名札']
     ];
     const found=rules.find(([pattern])=>pattern.test(s));
     const result=found?found[1]:null;typeCache.set(p.key,result);return result;

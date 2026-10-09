@@ -37,6 +37,8 @@ test('product types distinguish accessories, swimwear parts and uniform trousers
   assert.equal(kind('小清水小学校 メッシュ通学黄帽子 校章シール付き'),'帽子');
   assert.equal(kind('通学帽子 校章シール付'),'帽子');
   assert.equal(kind('校章シール'),'校章・名札');
+  assert.equal(kind('小清水小学校 校章シール付'),'校章・名札');
+  assert.equal(kind('校章シール入り'),'校章・名札');
   assert.equal(kind('女子水着 セパレート 上衣'),'水着上衣');
   assert.equal(kind('女子 半袖 ズボン',['水着']),'水着下衣');
   assert.equal(kind('ズボン ST7605',['学生ズボン']),'制服スラックス');
