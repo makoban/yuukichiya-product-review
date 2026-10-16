@@ -44,23 +44,62 @@ globalThis.VisualReviewCore = { create(D) {
     const result=found?found[1]:null;typeCache.set(p.key,result);return result;
   }
   const compatible=(a,b)=>!productType(P.get(a))||!productType(P.get(b))||productType(P.get(a))===productType(P.get(b));
+  // Manual matching is a human decision. Registration names can omit sleeves,
+  // call a gym top a shirt, or call the same indoor shoe a gym shoe.
+  // Keep automatic candidates strict; intersect possible physical types across
+  // the entire confirmed component so an unknown label cannot bridge opposites.
+  const manualTypeCache=new Map();
+  function manualTypes(p){
+    if(manualTypeCache.has(p.key))return manualTypeCache.get(p.key);
+    const type=productType(p),s=norm(p.name),sleeve=/半袖/.test(s)?'半袖':/長袖/.test(s)?'長袖':null;
+    let result=type?[type]:null;
+    if(/^(?:体操服|シャツ)・/.test(type||''))result=(sleeve?[sleeve]:['半袖','長袖']).map(v=>'shirt:'+v);
+    else if(/^(?:ポロシャツ|セーラー|ジャージ上衣|ブレザー|詰襟学生服|スモック|その他上着|セーター|ベスト)/.test(type||''))result=(sleeve?[sleeve]:['半袖','長袖']).map(v=>type.split('・')[0]+':'+v);
+    else if(['上履き','体育シューズ'].includes(type))result=['indoor-shoes'];
+    else if(type==='校章・名札'&&/赤白帽子/.test(s)&&/校章マーク(?:付|入り)/.test(s))result=['赤白帽子'];
+    else if(/水着|スイム/.test(s)||(p.cats||[]).some(c=>/^水着(?:用品)?$/.test(norm(c)))){
+      if(/インナー/.test(s))result=['水着インナー'];
+      else if(/パッド|パット/.test(s))result=['水着パッド'];
+      else if(/上衣|上着|トップス/.test(s))result=(sleeve?[sleeve]:['半袖','長袖']).map(v=>'swim-top:'+v);
+      else if(/下衣|ズボン|パンツ|ボトム|スパッツ/.test(s))result=['水着下衣'];
+    }
+    else if(!type&&/パンツ|ズボン/.test(s))result=['長ズボン'];
+    else if(!type&&/はし|箸|スプーン|フォーク|給食/.test(s))result=['給食用品'];
+    else if(!type&&sleeve)result=['shirt','ポロシャツ','セーラー','ジャージ上衣','ブレザー','詰襟学生服','スモック','その他上着','セーター','ベスト'].map(v=>v+':'+sleeve);
+    const value=result?new Set(result):null;manualTypeCache.set(p.key,value);return value;
+  }
+  const intersectTypes=(a,b)=>a===null?b===null?null:new Set(b):b===null?new Set(a):new Set([...a].filter(v=>b.has(v)));
+  const typesFit=types=>types===null||types.size>0;
+  function manualLinkAttested(pair,s,batchId){
+    const a=P.get(pair.left),b=P.get(pair.right),air=a?.source==='air'?a:b?.source==='air'?b:null,base=a?.source==='base'?a:b?.source==='base'?b:null;
+    if(!air||!base)return false;
+    if(!canLink(air.key,base.key))return false;
+    const solo=batchId?s.events.filter(e=>e.task==='solo:'+air.key&&e.batchId===batchId):heads('solo:'+air.key,s),same=batchId?s.events.filter(e=>e.task===pair.key&&e.batchId===batchId):heads(pair.key,s);
+    return solo.some(e=>e.value.mapping==='linked'&&e.value.target===base.key&&same.some(p=>p.value.relation==='same'&&p.batchId===e.batchId))&&(!!batchId||solo.length===1&&same.length===1);
+  }
+  function canLink(a,b,s){
+    if(!P.has(a)||!P.has(b)||P.get(a).source!=='air'||P.get(b).source!=='base')return false;
+    if(!typesFit(intersectTypes(manualTypes(P.get(a)),manualTypes(P.get(b)))))return false;
+    if(!s)return true;
+    const sem=semantic(s);return typesFit(intersectTypes(sem.types.get(sem.graph.root(a)),sem.types.get(sem.graph.root(b))));
+  }
   const autoPairs=D.pairs.filter(p=>compatible(p.left,p.right));
   const semanticCache=new WeakMap();
-  function semantic(s){if(!semanticCache.has(s)){const pairs=new Map([...autoPairs,...s.manualPairs.filter(p=>compatible(p.left,p.right))].map(p=>[p.key,p]));semanticCache.set(s,{pairs,...identityFor(s,pairs)});}return semanticCache.get(s);}
+  function semantic(s){if(!semanticCache.has(s)){const pairs=new Map([...autoPairs,...D.pairs.filter(p=>!compatible(p.left,p.right)&&manualLinkAttested(p,s)),...s.manualPairs.filter(p=>compatible(p.left,p.right)||manualLinkAttested(p,s))].map(p=>[p.key,p]));semanticCache.set(s,{pairs,...identityFor(s,pairs)});}return semanticCache.get(s);}
   function identityFor(s,pairs,ignored=new Set()){
-    const graph=union(),types=new Map(D.products.map(p=>[p.key,new Set(productType(p)?[productType(p)]:[])])),rejected=new Set();
+    const graph=union(),types=new Map(D.products.map(p=>[p.key,manualTypes(p)])),rejected=new Set();
     for(const p of [...pairs.values()].sort((a,b)=>a.key.localeCompare(b.key))){const h=heads(p.key,s);if(ignored.has(p.key)||h.length!==1||h[0].value.relation!=='same')continue;
-      const a=graph.root(p.left),b=graph.root(p.right),kinds=new Set([...types.get(a),...types.get(b)]);
-      if(kinds.size>1){rejected.add(p.key);continue;}graph.join(a,b);types.set(graph.root(a),kinds);
+      const a=graph.root(p.left),b=graph.root(p.right),kinds=intersectTypes(types.get(a),types.get(b));
+      if(!typesFit(kinds)){rejected.add(p.key);continue;}graph.join(a,b);types.set(graph.root(a),kinds);
     }
     return {graph,rejected,types};
   }
   function checkNewAnswers(s,events,checkTransitive=true){
     const pairs=new Map([...D.pairs,...s.manualPairs].map(p=>[p.key,p]));
-    for(const e of events){const p=pairs.get(e.task);if(e.value.relation==='same'&&p&&!compatible(p.left,p.right))throw Error('商品種別が違います。上衣・ズボンなどは別の商品として確認してください。');if(e.value.mapping==='linked'&&!compatible(e.task.slice(5),e.value.target))throw Error('商品種別が違うBASE商品は選べません。');}
+    for(const e of events){const p=pairs.get(e.task);if(e.value.relation==='same'&&p&&!compatible(p.left,p.right)&&!manualLinkAttested(p,s,e.batchId))throw Error('商品種別が違います。上衣・ズボンなどは別の商品として確認してください。');if(e.value.mapping==='linked'&&!canLink(e.task.slice(5),e.value.target))throw Error('上衣・下衣や袖丈が異なるBASE商品は選べません。');}
     if(!checkTransitive)return;
     const same=events.filter(e=>e.value.relation==='same'),{graph,types}=identityFor(s,semantic(s).pairs,new Set(same.map(e=>e.task)));
-    for(const e of same){const p=pairs.get(e.task),a=graph.root(p.left),b=graph.root(p.right),kinds=new Set([...types.get(a),...types.get(b)]);if(kinds.size>1)throw Error('別の商品種別を同じ商品としてつなぐことはできません。');graph.join(a,b);types.set(graph.root(a),kinds);}
+    for(const e of same){const p=pairs.get(e.task),a=graph.root(p.left),b=graph.root(p.right),kinds=intersectTypes(types.get(a),types.get(b));if(!typesFit(kinds))throw Error('別の商品種別を同じ商品としてつなぐことはできません。');graph.join(a,b);types.set(graph.root(a),kinds);}
   }
   const empty = () => ({schema,datasetId:D.datasetId,events:[],manualPairs:[]});
   const cache = new WeakMap();
@@ -163,8 +202,8 @@ globalThis.VisualReviewCore = { create(D) {
     }
     return append(s,wanted,[...manual.values()],info);
   }
-  function append(s,wanted,manualPairs,info){const allPairs=new Map([...D.pairs,...manualPairs].map(p=>[p.key,p]));for(const [task,value]of wanted){const p=allPairs.get(task);if(value.relation==='same'&&p&&!compatible(p.left,p.right))throw Error('商品種別が違います。上衣・ズボンなどは別の商品として確認してください。');if(value.mapping==='linked'&&!compatible(task.slice(5),value.target))throw Error('商品種別が違うBASE商品は選べません。');}const before=[],events=[];for(const [task,value]of wanted){const h=heads(task,s);before.push({task,heads:h.map(e=>e.id),value:h.length===1?h[0].value:null});events.push({id:info.uuid(),task,parents:h.map(e=>e.id),at:info.at,reviewer:info.reviewer,value,batchId:info.batchId,action:info.action||'answer',evidence:info.evidence||'mixed'});}const state=validate({...s,manualPairs,events:[...s.events,...events]});checkNewAnswers(state,events);return {state,events,before};}
+  function append(s,wanted,manualPairs,info){const before=[],events=[];for(const [task,value]of wanted){const h=heads(task,s);before.push({task,heads:h.map(e=>e.id),value:h.length===1?h[0].value:null});events.push({id:info.uuid(),task,parents:h.map(e=>e.id),at:info.at,reviewer:info.reviewer,value,batchId:info.batchId,action:info.action||'answer',evidence:info.evidence||'mixed'});}const state=validate({...s,manualPairs,events:[...s.events,...events]});checkNewAnswers(state,events);return {state,events,before};}
   function undo(s,record,info){const wanted=new Map();for(const b of record.before){const h=heads(b.task,s);if(h.some(e=>e.batchId!==record.batchId))throw Error('別の端末で回答が更新されています。先に内容を確認してください。');wanted.set(b.task,b.value||(b.task.startsWith('solo:')?{mapping:'reset'}:{relation:'reset'}));}return append(s,wanted,s.manualPairs,{...info,action:'undo'});}
   function delta(next,confirmed){const known=new Map(confirmed.events.map(e=>[e.id,canonical(e)])),byId=new Map(next.events.map(e=>[e.id,e])),included=new Set(),fresh=next.events.filter(e=>known.get(e.id)!==canonical(e)),queue=fresh.map(e=>e.id),freshTasks=new Set(fresh.map(e=>e.task));const needs=next.manualPairs.filter(p=>freshTasks.has(p.key)&&P.get(p.left).source===P.get(p.right).source&&initial.root(p.left)!==initial.root(p.right));if(needs.length){const graph=union();for(const p of D.pairs)graph.join(p.left,p.right);for(const p of next.manualPairs)if(P.get(p.left).source!==P.get(p.right).source)graph.join(p.left,p.right);const roots=new Set(needs.map(p=>graph.root(p.left)));for(const p of next.manualPairs)if(P.get(p.left).source!==P.get(p.right).source&&roots.has(graph.root(p.left))){const event=next.events.find(e=>e.task===p.key);if(event)queue.push(event.id);}}while(queue.length){const id=queue.pop();if(included.has(id))continue;included.add(id);queue.push(...byId.get(id).parents);}const events=next.events.filter(e=>included.has(e.id)),tasks=new Set(events.map(e=>e.task));return validate({...empty(),events,manualPairs:next.manualPairs.filter(p=>tasks.has(p.key))});}
-  return {schema,datasetId:D.datasetId,products:P,originalPairs,canonical,pairKey,empty,validate,merge,mergeIncoming:(a,b)=>merge(a,b,true),heads,queues,batch,append,undo,warnings,delta,productType,compatible,autoPairs};
+  return {schema,datasetId:D.datasetId,products:P,originalPairs,canonical,pairKey,empty,validate,merge,mergeIncoming:(a,b)=>merge(a,b,true),heads,queues,batch,append,undo,warnings,delta,productType,compatible,canLink,autoPairs};
 }};
