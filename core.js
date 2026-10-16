@@ -12,6 +12,9 @@ globalThis.VisualReviewCore = { create(D) {
   function productType(p) {
     if(typeCache.has(p.key))return typeCache.get(p.key);
     const s=norm(p.name), sleeve=/半袖/.test(s)?'半袖':/長袖/.test(s)?'長袖':'袖未記載';
+    // 2026-10-16: this legacy store label is a gym top (photo; BASE 77776833).
+    // Scope the classification correction to this store/school/name, not other shirts.
+    const elementaryGymShirt=p.source==='air'&&p.store==='本店'&&s==='新半袖シャツ'&&(p.cats||[]).some(c=>norm(c)==='古瀬間小学校');
     const swim=/水着|スイム|ロングスパッツ/.test(s)||(/上衣|上着|ズボン/.test(s)&&(p.cats||[]).some(c=>/^水着(?:用品)?$/.test(norm(c))));
     const swimType=/上衣|上着/.test(s)?'水着上衣':/ズボン|パンツ|スパッツ/.test(s)?'水着下衣':/セパレート|セット/.test(s)?'水着セット':'水着';
     const uniformPants=(p.cats||[]).some(c=>/^(?:学生|夏|冬)ズボン$/.test(norm(c)));
@@ -31,7 +34,7 @@ globalThis.VisualReviewCore = { create(D) {
       [/ジャージ.*(?:ズボン|下衣|パンツ)|(?:ズボン|下衣|パンツ).*ジャージ/,'長ズボン'],[uniformPants?/.*/:/$a/,'制服スラックス'],[/スラックス|学生ズボン/,'制服スラックス'],[/長ズボン|ズボン|長パンツ|ロングパンツ/,'長ズボン'],
       [/ベスト/,'ベスト'],[/セーター|カーディガン/,'セーター・カーディガン'],
       [/ジャージ(?:上衣|上着|上)|v首ジャージ/,'ジャージ上衣'],
-      [/体操(?:服)?|tシャツ/,'体操服・'+sleeve],
+      [elementaryGymShirt?/.*/:/体操(?:服)?|tシャツ/,'体操服・'+sleeve],
       [/ポロシャツ/,'ポロシャツ・'+sleeve],[/シャツ|カッター|片ポケ/,'シャツ・'+sleeve],
       [/セーラ/,'セーラー・'+sleeve],[/ブレザー|ジャケット/,'ブレザー'],
       [/学ラン|学らん|詰襟|詰衿|詰め襟|詰め衿/,'詰襟学生服'],

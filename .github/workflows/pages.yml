@@ -18,6 +18,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check product classification
+        run: node --test test/*.test.cjs
       - name: Prepare static files
         run: |
           mkdir site
